@@ -1,35 +1,29 @@
 import { Plus, X, LoaderCircle } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import ActivitySection from "./ActivitySection";
 import ImagesSection from "./ImagesSection";
 import TextSection from "./TextSection";
 import ButtonSection from "./ButtonSection";
 
-function resolveUrl(state) {
-  if (state.file) return URL.createObjectURL(state.file);
-  if (state.url) return state.url;
-  return null;
-}
-
 function PreviewBox({
-  state,
+  url,
+  loading,
   className,
   title,
   subtitle,
   buttonTitle,
   buttonLink,
 }) {
-  const url = resolveUrl(state);
   return (
     <div
       className={`relative flex justify-center items-center border-2 border-[#CCCCCC] rounded-xl overflow-hidden ${className}`}
     >
-      {state.loading ? (
+      {loading ? (
         <LoaderCircle size={24} className="text-[#C5C5C5] animate-spin" />
       ) : url ? (
         <>
           <img src={url} alt="preview" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-liner-to-t from-black/80 via-black/20 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 flex flex-col gap-3 p-3 py-9">
             {title && (
               <p
@@ -92,13 +86,12 @@ function PreviewBox({
   );
 }
 
-function ThumbnailBox({ state, className }) {
-  const url = resolveUrl(state);
+function ThumbnailBox({ url, loading, className }) {
   return (
     <div
       className={`flex justify-center items-center border-2 border-[#CCCCCC] rounded-2xl overflow-hidden ${className}`}
     >
-      {state.loading ? (
+      {loading ? (
         <LoaderCircle size={24} className="text-[#C5C5C5] animate-spin" />
       ) : url ? (
         <img src={url} alt="thumbnail" className="w-full h-full object-cover" />
@@ -107,6 +100,23 @@ function ThumbnailBox({ state, className }) {
       )}
     </div>
   );
+}
+
+// Fayl uchun Object URL ni bir marta yaratadi va tozalaydi (memory leak yo'q)
+function useObjectUrl(file) {
+  const [objectUrl, setObjectUrl] = useState(null);
+
+  useEffect(() => {
+    if (!file) {
+      setObjectUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setObjectUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  return objectUrl;
 }
 
 export default function Modal({
@@ -135,8 +145,16 @@ export default function Modal({
   const [saving, setSaving] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
   const [visible, setVisible] = useState(false);
-  const [timeoutId, setTimeoutId] = useState(null);
+  const toastTimerRef = useRef(null);
   const [trySubmit, setTrySubmit] = useState(false);
+
+  // Object URL — faqat fayl o'zgarganda bir marta yaratiladi, memory safe
+  const thumbnailObjectUrl = useObjectUrl(thumbnail.file);
+  const backgroundObjectUrl = useObjectUrl(background.file);
+
+  // Preview uchun yakuniy URL
+  const thumbnailPreviewUrl = thumbnailObjectUrl || thumbnail.url || null;
+  const backgroundPreviewUrl = backgroundObjectUrl || background.url || null;
 
   const isEditMode = !!editingStory;
 
@@ -200,6 +218,16 @@ export default function Modal({
     setter({ file: null, url: null, loading: false });
   }
 
+  function showToast(msg) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMsg(msg);
+    setVisible(true);
+    toastTimerRef.current = setTimeout(() => {
+      setVisible(false);
+      setTimeout(() => setToastMsg(null), 300);
+    }, 3000);
+  }
+
   function handleSave() {
     if (saving) return;
     if (!canSave) {
@@ -209,16 +237,9 @@ export default function Modal({
     setSaving(true);
 
     setTimeout(() => {
-      const newThumbnailUrl = thumbnail.file
-        ? URL.createObjectURL(thumbnail.file)
-        : thumbnail.url;
-      const newBackgroundUrl = background.file
-        ? URL.createObjectURL(background.file)
-        : background.url;
-
       const storyData = {
-        thumbnailUrl: newThumbnailUrl,
-        backgroundUrl: newBackgroundUrl,
+        thumbnailUrl: thumbnailPreviewUrl,
+        backgroundUrl: backgroundPreviewUrl,
         title,
         subtitle,
         buttonTitle,
@@ -229,38 +250,23 @@ export default function Modal({
 
       if (isEditMode) {
         onUpdate({ ...editingStory, ...storyData });
-        setToastMsg("Story changed successfully");
       } else {
         onSave(storyData);
-        showToast("Story posted successfully");
       }
 
       setSaving(false);
       closeModal();
-      setTimeout(() => setToastMsg(null), 3000);
+      showToast(
+        isEditMode ? "Story changed successfully" : "Story posted successfully",
+      );
     }, 1500);
-  }
-
-  function showToast(msg) {
-    if (timeoutId) clearTimeout(timeoutId);
-
-    setToastMsg(msg);
-    setVisible(true);
-
-    const id = setTimeout(() => {
-      setVisible(false);
-      setTimeout(() => setToastMsg(null), 300);
-    }, 3000);
-
-    setTimeoutId(id);
   }
 
   function handleCancel() {
     if (saving) return;
-    const msg = isEditMode ? "Story not changed" : "Story not posted";
+    const wasEditMode = isEditMode;
     closeModal();
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
+    showToast(wasEditMode ? "Story not changed" : "Story not posted");
   }
 
   return (
@@ -294,13 +300,15 @@ export default function Modal({
             <div className="w-[42%] flex flex-col">
               <div className="flex gap-2 pb-5 pt-4">
                 <ThumbnailBox
-                  state={thumbnail}
+                  url={thumbnailPreviewUrl}
+                  loading={thumbnail.loading}
                   className="w-30 h-30 shrink-0"
                 />
               </div>
               <div className="py-5 border-t-2 border-[#EDEDED] flex-1">
                 <PreviewBox
-                  state={background}
+                  url={backgroundPreviewUrl}
+                  loading={background.loading}
                   className="w-full h-full"
                   title={title}
                   subtitle={subtitle}
@@ -384,8 +392,8 @@ export default function Modal({
       {toastMsg && (
         <div
           className={`fixed flex justify-between items-center gap-10 px-3 border-2 border-[#757575] bg-[#000000D9] rounded-xl py-2 bottom-6 left-1/2 -translate-x-1/2 z-[100]
-    transition-all duration-300 ease-out
-    ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}
+            transition-all duration-300 ease-out
+            ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}
         >
           <div className="flex items-center gap-2">
             <img
@@ -401,7 +409,6 @@ export default function Modal({
               {toastMsg}
             </p>
           </div>
-
           <button
             className="text-[#000000D9] bg-[#FFFFFF] px-3 py-2 rounded-lg text-sm font-medium"
             onClick={() => {

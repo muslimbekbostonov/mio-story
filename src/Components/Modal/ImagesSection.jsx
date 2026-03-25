@@ -23,7 +23,7 @@ function ImageInput({
     const selected = e.target.files[0];
     if (!selected) return;
     if (!ALLOWED.includes(selected.type)) {
-      setError("Wrong format. Supported: png, jpeg, svg, webp");
+      setError("Wrong image format. Supported: png, jpeg, svg, webp");
       return;
     }
     setError("");

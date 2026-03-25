@@ -1,13 +1,26 @@
 import { CircleEllipsis, SquarePen, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { IoMdEye } from "react-icons/io";
 import DeleteModal from "../DeleteModal";
 
 export default function StoryCard({ story, onDelete, onCancelDelete, onEdit }) {
   const [open, setOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   const thumbnailUrl = story?.thumbnailUrl || null;
+
+  // Dropdown tashqarisiga click qilinsa yopiladi
+  useEffect(() => {
+    if (!open) return;
+    function handleOutsideClick(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [open]);
 
   return (
     <>
@@ -28,14 +41,14 @@ export default function StoryCard({ story, onDelete, onCancelDelete, onEdit }) {
               <IoMdEye size={20} />
               <p>0</p>
             </div>
-            <div className="relative">
+            <div className="relative" ref={dropdownRef}>
               <CircleEllipsis
                 size={18}
                 className="cursor-pointer"
                 onClick={() => setOpen((o) => !o)}
               />
               <div
-                className={`absolute right-0 mt-2 w-41 flex flex-col rounded-xl shadow-lg p-1.5 bg-white border border-[#CCCCCC] z-10
+                className={`absolute right-0 mt-2 p-2 w-40 flex flex-col rounded-xl shadow-lg bg-white border border-[#CCCCCC] z-10
                   transition-all duration-200 origin-top-right
                   ${open ? "opacity-100 scale-100 pointer-events-auto" : "opacity-0 scale-95 pointer-events-none"}`}
               >
