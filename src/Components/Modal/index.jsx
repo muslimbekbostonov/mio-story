@@ -4,6 +4,7 @@ import ActivitySection from "./ActivitySection";
 import ImagesSection from "./ImagesSection";
 import TextSection from "./TextSection";
 import ButtonSection from "./ButtonSection";
+import CloseConfirmModal from "../CloseConfirmModal";
 
 function PreviewBox({
   url,
@@ -147,6 +148,7 @@ export default function Modal({
   const [visible, setVisible] = useState(false);
   const toastTimerRef = useRef(null);
   const [trySubmit, setTrySubmit] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
 
   // Object URL — faqat fayl o'zgarganda bir marta yaratiladi, memory safe
   const thumbnailObjectUrl = useObjectUrl(thumbnail.file);
@@ -171,6 +173,16 @@ export default function Modal({
     !thumbnail.loading &&
     !background.loading;
 
+  // Forma to'ldirilganmi?
+  const isDirty =
+    hasThumbnail ||
+    hasBackground ||
+    hasActiveUntil ||
+    !!title.trim() ||
+    !!subtitle.trim() ||
+    !!buttonTitle.trim() ||
+    !!buttonLink.trim();
+
   function resetAll() {
     setThumbnail({ file: null, url: null, loading: false });
     setBackground({ file: null, url: null, loading: false });
@@ -185,6 +197,7 @@ export default function Modal({
 
   useEffect(() => {
     if (!isOpen) return;
+    setConfirmClose(false);
     if (editingStory) {
       setThumbnail({
         file: null,
@@ -237,42 +250,65 @@ export default function Modal({
     setSaving(true);
 
     setTimeout(() => {
-      const storyData = {
-        thumbnailUrl: thumbnailPreviewUrl,
-        backgroundUrl: backgroundPreviewUrl,
-        title,
-        subtitle,
-        buttonTitle,
-        buttonLink,
-        activeUntil,
-        unlimited,
-      };
+      try {
+        const storyData = {
+          thumbnailUrl: thumbnailPreviewUrl,
+          backgroundUrl: backgroundPreviewUrl,
+          title,
+          subtitle,
+          buttonTitle,
+          buttonLink,
+          activeUntil,
+          unlimited,
+        };
 
-      if (isEditMode) {
-        onUpdate({ ...editingStory, ...storyData });
-      } else {
-        onSave(storyData);
+        if (isEditMode) {
+          onUpdate({ ...editingStory, ...storyData });
+        } else {
+          onSave(storyData);
+        }
+
+        setSaving(false);
+        closeModal();
+        showToast(
+          isEditMode
+            ? "Story changed successfully"
+            : "Story posted successfully",
+        );
+      } catch {
+        setSaving(false);
+        showToast("Something went wrong. Please try again.");
       }
-
-      setSaving(false);
-      closeModal();
-      showToast(
-        isEditMode ? "Story changed successfully" : "Story posted successfully",
-      );
     }, 1500);
   }
 
-  function handleCancel() {
+  // Yopishga urinish — dirty bo'lsa confirm so'raydi
+  function tryClose() {
     if (saving) return;
-    const wasEditMode = isEditMode;
+    if (isDirty) {
+      setConfirmClose(true);
+    } else {
+      closeModal();
+    }
+  }
+
+  function handleConfirmClose() {
+    setConfirmClose(false);
     closeModal();
-    showToast(wasEditMode ? "Story not changed" : "Story not posted");
+  }
+
+  function handleCancelClose() {
+    setConfirmClose(false);
+  }
+
+  function handleCancel() {
+    tryClose();
   }
 
   return (
     <>
       <div
-        onClick={(e) => e.target === e.currentTarget && !saving && closeModal()}
+        onClick={(e) => e.target === e.currentTarget && !saving && tryClose()}
         className={`fixed inset-0 z-50 flex p-6 justify-end transition-all duration-300
           ${isOpen ? "bg-black/40 pointer-events-auto" : "bg-black/0 pointer-events-none"}`}
       >
@@ -286,7 +322,7 @@ export default function Modal({
               {isEditMode ? "Edit story" : "Add new story"}
             </h2>
             <button
-              onClick={closeModal}
+              onClick={tryClose}
               disabled={saving}
               className="rounded-full bg-[#0000000D] p-2 hover:bg-[#00000019] transition-colors duration-200"
             >
@@ -387,6 +423,13 @@ export default function Modal({
           </div>
         </div>
       </div>
+
+      {/* Close confirm modal */}
+      <CloseConfirmModal
+        isOpen={confirmClose}
+        onCancel={handleCancelClose}
+        onConfirm={handleConfirmClose}
+      />
 
       {/* Toast */}
       {toastMsg && (

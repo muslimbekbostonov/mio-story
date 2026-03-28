@@ -34,7 +34,9 @@ export default function ActivitySection({
             className={`flex justify-between items-center py-2.5 px-3 border rounded-lg bg-[#F0F0F0] cursor-pointer
               ${showError ? "border-[#E73C50]" : "border-[#CCCCCC]"}`}
           >
-            <span className="text-sm text-[#757575]">Unlimited</span>
+            <span className="text-sm text-[#757575]">
+              Title<span className="text-[#E73C50]"> *</span>
+            </span>
             <Calendar size={16} className="text-[#757575] shrink-0" />
           </div>
         ) : (
